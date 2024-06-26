@@ -1,7 +1,9 @@
 # \[CVPR 2024\] Look-Up Table Compression for Efficient Image Restoration
 
 Yinglong Li, [Jiacheng Li](https://ddlee-cn.github.io/), [Zhiwei Xiong](http://staff.ustc.edu.cn/~zwxiong/)
+
 [CVPR Paper](https://openaccess.thecvf.com/content/CVPR2024/html/Li_Look-Up_Table_Compression_for_Efficient_Image_Restoration_CVPR_2024_paper.html)
+
 ![Overview of DFC](https://github.com/leenas233/DFC/blob/main/docs/DFC_overview.png)
 
 ## Usage
