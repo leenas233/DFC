@@ -7,7 +7,7 @@ Yinglong Li, [Jiacheng Li](https://ddlee-cn.github.io/), [Zhiwei Xiong](http://s
 ![Overview of DFC](https://github.com/leenas233/DFC/blob/main/docs/DFC_overview.png)
 
 ## Usage
-Updating! Any questions, please contact me any time.
+Updating! Any questions, please contact me at any time.
 ### Dataset
 | task             | training dataset                                      | testing dataset                                                                                                                               |
 | ---------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -53,5 +53,7 @@ If you found our implementation useful, please consider citing our paper:
 
 ## Acknowledgement
 This work is based on the following works, thank the authors a lot.
+
 [SR-LUT](https://github.com/yhjo09/SR-LUT)
+
 [MuLUT](https://github.com/ddlee-cn/MuLUT/tree/main)
