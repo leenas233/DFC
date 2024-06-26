@@ -9,10 +9,9 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from PIL import Image
-from torch.utils.tensorboard import SummaryWriter
 
 import model as Model
-from data import Provider, SRBenchmark
+from data import Provider, GoProTest
 
 sys.path.insert(0, "../")  # run under the project directory
 from common.option import TrainOptions
@@ -22,7 +21,6 @@ from common.Writer import Logger
 torch.backends.cudnn.benchmark = True
 
 mode_pad_dict = {"s": 1, "d": 2, "y": 2, "e": 3, "h": 3, "o": 3}
-
 
 def round_func(input):
     # Backward Pass Differentiable Approximation (BPDA)
@@ -47,54 +45,45 @@ def SaveCheckpoint(model_G, opt_G, opt, i, best=False):
 
 
 def valid_steps(model_G, valid, opt, iter):
-    if opt.debug:
-        datasets = ['Set5', 'Set14']
-    else:
-        datasets = ['Set5', 'Set14']
-
     with torch.no_grad():
         model_G.eval()
 
-        for i in range(len(datasets)):
-            psnrs = []
-            files = valid.files[datasets[i]]
+        psnrs = []
 
-            result_path = os.path.join(opt.valoutDir, datasets[i])
-            if not os.path.isdir(result_path):
-                os.makedirs(result_path)
+        result_path = os.path.join(opt.valoutDir)
+        if not os.path.isdir(result_path):
+            os.makedirs(result_path)
 
-            for j in range(len(files)):
-                key = datasets[i] + '_' + files[j][:-4]
+        for key in range(len(valid)):
+            input_im = valid.lr_ims[valid.blur_list[key]]
+            lb = valid.hr_ims[valid.sharp_list[key]]
+            im = torch.Tensor(np.expand_dims(np.transpose(input_im, [2, 0, 1]), 0).astype(np.float32)/255.0).cuda()
 
-                lb = valid.ims[key]
-                input_im = valid.ims[key + 'x%d' % opt.scale]
+            pred = model_G(im, 'valid')
 
-                input_im = input_im.astype(np.float32) / 255.0
-                im = torch.Tensor(np.expand_dims(
-                    np.transpose(input_im, [2, 0, 1]), axis=0)).cuda()
+            pred = np.transpose(np.squeeze(
+                pred.data.cpu().numpy(), 0), [1, 2, 0])
+            pred = np.round(np.clip(pred, 0, 255)).astype(np.uint8)
 
-                pred = model_G(im,'valid')
+            # Y PSNR
+            # left, right = _rgb2ycbcr(pred)[:, :, 0], _rgb2ycbcr(lb)[:, :, 0]
+            # Color PSNR
+            left, right = pred, lb
+            psnrs.append(PSNR(left, right, 0))
 
-                pred = np.transpose(np.squeeze(
-                    pred.data.cpu().numpy(), 0), [1, 2, 0])
-                pred = np.round(np.clip(pred, 0, 255)).astype(np.uint8)
+            if iter < 10000:  # save input and gt at start
+                input_img = np.round(np.clip(input_im, 0, 255)).astype(np.uint8)
+                Image.fromarray(input_img[:, :]).save(
+                    os.path.join(result_path, valid.blur_list[key].replace("/", "_").replace(".png", "_input.png")))
+                Image.fromarray(lb[:, :].astype(np.uint8)).save(
+                    os.path.join(result_path, valid.sharp_list[key].replace("/", "_").replace(".png", "_gt.png")))
 
-                left, right = _rgb2ycbcr(pred)[:, :, 0], _rgb2ycbcr(lb)[:, :, 0]
-                psnrs.append(PSNR(left, right, opt.scale))  # single channel, no scale change
+            Image.fromarray(pred[:, :]).save(
+                os.path.join(result_path, valid.sharp_list[key].replace("/", "_").replace(".png", "_net.png")))
 
-                if iter < 10000:  # save input and gt at start
-                    input_img = np.round(np.clip(input_im * 255.0, 0, 255)).astype(np.uint8)
-                    Image.fromarray(input_img).save(
-                        os.path.join(result_path, '{}_input.png'.format(key.split('_')[-1])))
-                    Image.fromarray(lb.astype(np.uint8)).save(
-                        os.path.join(result_path, '{}_gt.png'.format(key.split('_')[-1])))
-
-                Image.fromarray(pred).save(
-                    os.path.join(result_path, '{}_net.png'.format(key.split('_')[-1])))
-
-            logger.info(
-                'Iter {} | Dataset {} | AVG Val PSNR: {:02f}'.format(iter, datasets[i], np.mean(np.asarray(psnrs))))
-            writer.scalar_summary('PSNR_valid/{}'.format(datasets[i]), np.mean(np.asarray(psnrs)), iter)
+        logger.info(
+            'Iter {} | AVG Val cPSNR: {}'.format(iter, np.mean(np.asarray(psnrs))))
+        writer.scalar_summary('PSNR_valid/{}'.format("GoPro"), np.mean(np.asarray(psnrs)), iter)
 
 
 if __name__ == "__main__":
@@ -114,7 +103,7 @@ if __name__ == "__main__":
 
     model = getattr(Model, opt.model)
 
-    model_G = model(nf=opt.nf, scale=opt.scale, modes=modes, stages=stages).cuda()
+    model_G = model(nf=opt.nf, modes=modes, stages=stages).cuda()
 
     if opt.gpuNum > 1:
         model_G = torch.nn.DataParallel(model_G, device_ids=list(range(opt.gpuNum)))
@@ -142,10 +131,10 @@ if __name__ == "__main__":
         opt_G.load_state_dict(lm.state_dict())
 
     # Training dataset
-    train_iter = Provider(opt.batchSize, opt.workerNum, opt.scale, opt.trainDir, opt.cropSize)
+    train_iter = Provider(opt.batchSize, opt.workerNum, opt.trainDir, opt.cropSize)
 
     # Valid dataset
-    valid = SRBenchmark(opt.valDir, scale=opt.scale)
+    valid = GoProTest(opt.valDir)
 
     l_accum = [0., 0., 0.]
     dT = 0.
@@ -169,7 +158,7 @@ if __name__ == "__main__":
         st = time.time()
         opt_G.zero_grad()
 
-        pred = model_G(im,'train')
+        pred = model_G(im, 'train')
 
         loss_G = F.mse_loss(pred, lb)
         loss_G.backward()

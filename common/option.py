@@ -185,6 +185,8 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--gpuNum', '-g', type=int, default=1)
         parser.add_argument('--workerNum', '-n', type=int, default=8)
 
+        parser.add_argument('--load_lutName', type=str, default='LUT')
+
         self.isTrain = True
         return parser
 
@@ -200,6 +202,8 @@ class TestOptions(BaseOptions):
         parser.add_argument('--testDir', type=str, default='../data/Benchmark')
         parser.add_argument('--resultRoot', type=str, default='../results')
         parser.add_argument('--lutName', type=str, default='LUT_ft')
+
+        parser.add_argument('--load_model_path', type=str, default=None)
 
         self.isTrain = False
         return parser

@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from PIL import Image
 
-import model
+import model as Model
 from data import Provider, SRBenchmark
 
 sys.path.insert(0, "../")  # run under the current directory
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     modes = [i for i in opt.modes]
     stages = opt.stages
 
-    model = model.MuLUT
+    model = Model.MuLUT
 
     model_G = model(lut_folder=opt.expDir, modes=modes, stages=stages, upscale=opt.scale, interval=opt.interval).cuda()
 

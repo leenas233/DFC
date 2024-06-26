@@ -22,7 +22,7 @@ def round_func(input):
     return out
 
 class BaseSRNets(nn.Module):
-    """ A MuLUT network with Residual connection"""
+    """ A MuLUT network"""
 
     def __init__(self, nf=64, scale=4, modes=['s', 'd', 'y'], stages=2):
         super(BaseSRNets, self).__init__()

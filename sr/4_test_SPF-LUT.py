@@ -8,9 +8,6 @@ from PIL import Image
 sys.path.insert(0, "../")  # run under the current directory
 from common.option import TestOptions
 from common.utils import PSNR, cal_ssim, modcrop, _rgb2ycbcr
-dwidth = 2
-delta_bit = 1  # i5:1, i6:2, i7:3
-compression_type = 'xyzt'
 
 
 def FourSimplexInterpFaster(weight, img_in, h, w, interval, rot, upscale=4, out_c=1, mode='s',d = 2,ref2index=None):
@@ -256,12 +253,11 @@ def InterpTorchBatch_channel(weight,out_c, img_in, interval):
 
     # pytorch 1.5 dont support rounding_mode, use // equavilent
     # https://pytorch.org/docs/1.5.0/torch.html#torch.div
-    tmp = (img_in // q).astype(np.uint8)
-    # print(tmp.max(),tmp.min())
+    tmp = (img_in // q).astype(np.int_)
     img_a1,img_b1,img_c1,img_d1 = tmp[:,0:1,:,:],tmp[:,1:2,:,:],tmp[:,2:3,:,:],tmp[:,3:,:,:]
 
     # Extract LSBs
-    tmp = (img_in % q).astype(np.int16)
+    tmp = (img_in % q)
     fa,fb,fc,fd = tmp[:,0:1,:,:],tmp[:,1:2,:,:],tmp[:,2:3,:,:],tmp[:,3:,:,:]
 
 
@@ -269,56 +265,55 @@ def InterpTorchBatch_channel(weight,out_c, img_in, interval):
     img_b2 = img_b1 + 1
     img_c2 = img_c1 + 1
     img_d2 = img_d1 + 1
-    weight = weight.reshape((L,L,L,L,-1))
 
     p0000 = weight[
-        img_a1.flatten(), img_b1.flatten(), img_c1.flatten(), img_d1.flatten()].reshape(
+        img_a1.flatten() * L * L * L + img_b1.flatten() * L * L + img_c1.flatten() * L + img_d1.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p0001 = weight[
-        img_a1.flatten(), img_b1.flatten(), img_c1.flatten(), img_d2.flatten()].reshape(
+        img_a1.flatten() * L * L * L + img_b1.flatten() * L * L + img_c1.flatten() * L + img_d2.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p0010 = weight[
-        img_a1.flatten(), img_b1.flatten(), img_c2.flatten(), img_d1.flatten()].reshape(
+        img_a1.flatten() * L * L * L + img_b1.flatten() * L * L + img_c2.flatten() * L + img_d1.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p0011 = weight[
-        img_a1.flatten(), img_b1.flatten(), img_c2.flatten(), img_d2.flatten()].reshape(
+        img_a1.flatten() * L * L * L + img_b1.flatten() * L * L + img_c2.flatten() * L + img_d2.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p0100 = weight[
-        img_a1.flatten(), img_b2.flatten(), img_c1.flatten(), img_d1.flatten()].reshape(
+        img_a1.flatten() * L * L * L + img_b2.flatten() * L * L + img_c1.flatten() * L + img_d1.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p0101 = weight[
-        img_a1.flatten(), img_b2.flatten(), img_c1.flatten(), img_d2.flatten()].reshape(
+        img_a1.flatten() * L * L * L + img_b2.flatten() * L * L + img_c1.flatten() * L + img_d2.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p0110 = weight[
-        img_a1.flatten(), img_b2.flatten(), img_c2.flatten(), img_d1.flatten()].reshape(
+        img_a1.flatten() * L * L * L + img_b2.flatten() * L * L + img_c2.flatten() * L + img_d1.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p0111 = weight[
-        img_a1.flatten(), img_b2.flatten(), img_c2.flatten(), img_d2.flatten()].reshape(
+        img_a1.flatten() * L * L * L + img_b2.flatten() * L * L + img_c2.flatten() * L + img_d2.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
 
     p1000 = weight[
-        img_a2.flatten(), img_b1.flatten(), img_c1.flatten(), img_d1.flatten()].reshape(
+        img_a2.flatten() * L * L * L + img_b1.flatten() * L * L + img_c1.flatten() * L + img_d1.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p1001 = weight[
-        img_a2.flatten(), img_b1.flatten(), img_c1.flatten(), img_d2.flatten()].reshape(
+        img_a2.flatten() * L * L * L + img_b1.flatten() * L * L + img_c1.flatten() * L + img_d2.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p1010 = weight[
-        img_a2.flatten(), img_b1.flatten(), img_c2.flatten(), img_d1.flatten()].reshape(
+        img_a2.flatten() * L * L * L + img_b1.flatten() * L * L + img_c2.flatten() * L + img_d1.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p1011 = weight[
-        img_a2.flatten(), img_b1.flatten(), img_c2.flatten(), img_d2.flatten()].reshape(
+        img_a2.flatten() * L * L * L + img_b1.flatten() * L * L + img_c2.flatten() * L + img_d2.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p1100 = weight[
-        img_a2.flatten(), img_b2.flatten(), img_c1.flatten(), img_d1.flatten()].reshape(
+        img_a2.flatten() * L * L * L + img_b2.flatten() * L * L + img_c1.flatten() * L + img_d1.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p1101 = weight[
-        img_a2.flatten(), img_b2.flatten(), img_c1.flatten(), img_d2.flatten()].reshape(
+        img_a2.flatten() * L * L * L + img_b2.flatten() * L * L + img_c1.flatten() * L + img_d2.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p1110 = weight[
-        img_a2.flatten(), img_b2.flatten(), img_c2.flatten(), img_d1.flatten()].reshape(
+        img_a2.flatten() * L * L * L + img_b2.flatten() * L * L + img_c2.flatten() * L + img_d1.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
     p1111 = weight[
-        img_a2.flatten() , img_b2.flatten(), img_c2.flatten(), img_d2.flatten()].reshape(
+        img_a2.flatten() * L * L * L + img_b2.flatten() * L * L + img_c2.flatten() * L + img_d2.flatten()].reshape(
         (img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
 
     out = np.zeros((img_a1.shape[0], img_a1.shape[1], img_a1.shape[2], img_a1.shape[3], out_c))
@@ -358,90 +353,90 @@ def InterpTorchBatch_channel(weight,out_c, img_in, interval):
     fcd = fc > fd
 
     i1 = i = np.logical_and.reduce((fab, fbc, fcd)).squeeze(1)
-    out[i] = ((q - fa[i]) * p0000[i] + (fa[i] - fb[i]) * p1000[i] + (fb[i] - fc[i]) * p1100[i] + (fc[i] - fd[i]) * p1110[
-        i] + (fd[i]) * p1111[i])/q
+    out[i] = (q - fa[i]) * p0000[i] + (fa[i] - fb[i]) * p1000[i] + (fb[i] - fc[i]) * p1100[i] + (fc[i] - fd[i]) * p1110[
+        i] + (fd[i]) * p1111[i]
     i2 = i = np.logical_and.reduce((~i1[:, None], fab, fbc, fbd)).squeeze(1)
-    out[i] = ((q - fa[i]) * p0000[i] + (fa[i] - fb[i]) * p1000[i] + (fb[i] - fd[i]) * p1100[i] + (fd[i] - fc[i]) * p1101[
-        i] + (fc[i]) * p1111[i])/q
+    out[i] = (q - fa[i]) * p0000[i] + (fa[i] - fb[i]) * p1000[i] + (fb[i] - fd[i]) * p1100[i] + (fd[i] - fc[i]) * p1101[
+        i] + (fc[i]) * p1111[i]
     i3 = i = np.logical_and.reduce((~i1[:, None], ~i2[:, None], fab, fbc, fad)).squeeze(1)
-    out[i] = ((q - fa[i]) * p0000[i] + (fa[i] - fd[i]) * p1000[i] + (fd[i] - fb[i]) * p1001[i] + (fb[i] - fc[i]) * p1101[
-        i] + (fc[i]) * p1111[i])/q
+    out[i] = (q - fa[i]) * p0000[i] + (fa[i] - fd[i]) * p1000[i] + (fd[i] - fb[i]) * p1001[i] + (fb[i] - fc[i]) * p1101[
+        i] + (fc[i]) * p1111[i]
     i4 = i = np.logical_and.reduce((~i1[:, None], ~i2[:, None], ~i3[:, None], fab, fbc)).squeeze(1)
 
-    out[i] = ((q - fd[i]) * p0000[i] + (fd[i] - fa[i]) * p0001[i] + (fa[i] - fb[i]) * p1001[i] + (fb[i] - fc[i]) * p1101[
-        i] + (fc[i]) * p1111[i])/q
+    out[i] = (q - fd[i]) * p0000[i] + (fd[i] - fa[i]) * p0001[i] + (fa[i] - fb[i]) * p1001[i] + (fb[i] - fc[i]) * p1101[
+        i] + (fc[i]) * p1111[i]
 
     i5 = i = np.logical_and.reduce((~(fbc), fab, fac, fbd)).squeeze(1)
-    out[i] = ((q - fa[i]) * p0000[i] + (fa[i] - fc[i]) * p1000[i] + (fc[i] - fb[i]) * p1010[i] + (fb[i] - fd[i]) * p1110[
-        i] + (fd[i]) * p1111[i])/q
+    out[i] = (q - fa[i]) * p0000[i] + (fa[i] - fc[i]) * p1000[i] + (fc[i] - fb[i]) * p1010[i] + (fb[i] - fd[i]) * p1110[
+        i] + (fd[i]) * p1111[i]
     i6 = i = np.logical_and.reduce((~(fbc), ~i5[:, None], fab, fac, fcd)).squeeze(1)
-    out[i] = ((q - fa[i]) * p0000[i] + (fa[i] - fc[i]) * p1000[i] + (fc[i] - fd[i]) * p1010[i] + (fd[i] - fb[i]) * p1011[
-        i] + (fb[i]) * p1111[i])/q
+    out[i] = (q - fa[i]) * p0000[i] + (fa[i] - fc[i]) * p1000[i] + (fc[i] - fd[i]) * p1010[i] + (fd[i] - fb[i]) * p1011[
+        i] + (fb[i]) * p1111[i]
     i7 = i = np.logical_and.reduce((~(fbc), ~i5[:, None], ~i6[:, None], fab, fac, fad)).squeeze(1)
-    out[i] = ((q - fa[i]) * p0000[i] + (fa[i] - fd[i]) * p1000[i] + (fd[i] - fc[i]) * p1001[i] + (fc[i] - fb[i]) * p1011[
-        i] + (fb[i]) * p1111[i])/q
+    out[i] = (q - fa[i]) * p0000[i] + (fa[i] - fd[i]) * p1000[i] + (fd[i] - fc[i]) * p1001[i] + (fc[i] - fb[i]) * p1011[
+        i] + (fb[i]) * p1111[i]
     i8 = i = np.logical_and.reduce((~(fbc), ~i5[:, None], ~i6[:, None], ~i7[:, None], fab, fac)).squeeze(1)
-    out[i] = ((q - fd[i]) * p0000[i] + (fd[i] - fa[i]) * p0001[i] + (fa[i] - fc[i]) * p1001[i] + (fc[i] - fb[i]) * p1011[
-        i] + (fb[i]) * p1111[i])/q
+    out[i] = (q - fd[i]) * p0000[i] + (fd[i] - fa[i]) * p0001[i] + (fa[i] - fc[i]) * p1001[i] + (fc[i] - fb[i]) * p1011[
+        i] + (fb[i]) * p1111[i]
 
     i9 = i = np.logical_and.reduce((~(fbc), ~(fac), fab, fbd)).squeeze(1)
-    out[i] = ((q - fc[i]) * p0000[i] + (fc[i] - fa[i]) * p0010[i] + (fa[i] - fb[i]) * p1010[i] + (fb[i] - fd[i]) * p1110[
-        i] + (fd[i]) * p1111[i])/q
+    out[i] = (q - fc[i]) * p0000[i] + (fc[i] - fa[i]) * p0010[i] + (fa[i] - fb[i]) * p1010[i] + (fb[i] - fd[i]) * p1110[
+        i] + (fd[i]) * p1111[i]
     # Fix the overflow bug in SR-LUT's implementation, should compare fd with fa first!
     # i10 = i = np.logical_and.reduce((~(fbc), ~(fac), ~i9[:,None], fab, fcd)).squeeze(1)
     # out[i] = (q-fc[i]) * p0000[i] + (fc[i]-fa[i]) * p0010[i] + (fa[i]-fd[i]) * p1010[i] + (fd[i]-fb[i]) * p1011[i] + (fb[i]) * p1111[i]
     # i11 = i = np.logical_and.reduce((~(fbc), ~(fac), ~i9[:,None], ~i10[:,None], fab, fad)).squeeze(1)
     # out[i] = (q-fc[i]) * p0000[i] + (fc[i]-fd[i]) * p0010[i] + (fd[i]-fa[i]) * p0011[i] + (fa[i]-fb[i]) * p1011[i] + (fb[i]) * p1111[i]
     i10 = i = np.logical_and.reduce((~(fbc), ~(fac), ~i9[:, None], fab, fad)).squeeze(1)  # c > a > d > b
-    out[i] = ((q - fc[i]) * p0000[i] + (fc[i] - fa[i]) * p0010[i] + (fa[i] - fd[i]) * p1010[i] + (fd[i] - fb[i]) * p1011[
-        i] + (fb[i]) * p1111[i])/q
+    out[i] = (q - fc[i]) * p0000[i] + (fc[i] - fa[i]) * p0010[i] + (fa[i] - fd[i]) * p1010[i] + (fd[i] - fb[i]) * p1011[
+        i] + (fb[i]) * p1111[i]
     i11 = i = np.logical_and.reduce((~(fbc), ~(fac), ~i9[:, None], ~i10[:, None], fab, fcd)).squeeze(1)  # c > d > a > b
-    out[i] = ((q - fc[i]) * p0000[i] + (fc[i] - fd[i]) * p0010[i] + (fd[i] - fa[i]) * p0011[i] + (fa[i] - fb[i]) * p1011[
-        i] + (fb[i]) * p1111[i])/q
+    out[i] = (q - fc[i]) * p0000[i] + (fc[i] - fd[i]) * p0010[i] + (fd[i] - fa[i]) * p0011[i] + (fa[i] - fb[i]) * p1011[
+        i] + (fb[i]) * p1111[i]
     i12 = i = np.logical_and.reduce((~(fbc), ~(fac), ~i9[:, None], ~i10[:, None], ~i11[:, None], fab)).squeeze(1)
-    out[i] = ((q - fd[i]) * p0000[i] + (fd[i] - fc[i]) * p0001[i] + (fc[i] - fa[i]) * p0011[i] + (fa[i] - fb[i]) * p1011[
-        i] + (fb[i]) * p1111[i])/q
+    out[i] = (q - fd[i]) * p0000[i] + (fd[i] - fc[i]) * p0001[i] + (fc[i] - fa[i]) * p0011[i] + (fa[i] - fb[i]) * p1011[
+        i] + (fb[i]) * p1111[i]
 
     i13 = i = np.logical_and.reduce((~(fab), fac, fcd)).squeeze(1)
-    out[i] = ((q - fb[i]) * p0000[i] + (fb[i] - fa[i]) * p0100[i] + (fa[i] - fc[i]) * p1100[i] + (fc[i] - fd[i]) * p1110[
-        i] + (fd[i]) * p1111[i])/q
+    out[i] = (q - fb[i]) * p0000[i] + (fb[i] - fa[i]) * p0100[i] + (fa[i] - fc[i]) * p1100[i] + (fc[i] - fd[i]) * p1110[
+        i] + (fd[i]) * p1111[i]
     i14 = i = np.logical_and.reduce((~(fab), ~i13[:, None], fac, fad)).squeeze(1)
-    out[i] = ((q - fb[i]) * p0000[i] + (fb[i] - fa[i]) * p0100[i] + (fa[i] - fd[i]) * p1100[i] + (fd[i] - fc[i]) * p1101[
-        i] + (fc[i]) * p1111[i])/q
+    out[i] = (q - fb[i]) * p0000[i] + (fb[i] - fa[i]) * p0100[i] + (fa[i] - fd[i]) * p1100[i] + (fd[i] - fc[i]) * p1101[
+        i] + (fc[i]) * p1111[i]
     i15 = i = np.logical_and.reduce((~(fab), ~i13[:, None], ~i14[:, None], fac, fbd)).squeeze(1)
-    out[i] = ((q - fb[i]) * p0000[i] + (fb[i] - fd[i]) * p0100[i] + (fd[i] - fa[i]) * p0101[i] + (fa[i] - fc[i]) * p1101[
-        i] + (fc[i]) * p1111[i])/q
+    out[i] = (q - fb[i]) * p0000[i] + (fb[i] - fd[i]) * p0100[i] + (fd[i] - fa[i]) * p0101[i] + (fa[i] - fc[i]) * p1101[
+        i] + (fc[i]) * p1111[i]
     i16 = i = np.logical_and.reduce((~(fab), ~i13[:, None], ~i14[:, None], ~i15[:, None], fac)).squeeze(1)
-    out[i] = ((q - fd[i]) * p0000[i] + (fd[i] - fb[i]) * p0001[i] + (fb[i] - fa[i]) * p0101[i] + (fa[i] - fc[i]) * p1101[
-        i] + (fc[i]) * p1111[i])/q
+    out[i] = (q - fd[i]) * p0000[i] + (fd[i] - fb[i]) * p0001[i] + (fb[i] - fa[i]) * p0101[i] + (fa[i] - fc[i]) * p1101[
+        i] + (fc[i]) * p1111[i]
 
     i17 = i = np.logical_and.reduce((~(fab), ~(fac), fbc, fad)).squeeze(1)
-    out[i] = ((q - fb[i]) * p0000[i] + (fb[i] - fc[i]) * p0100[i] + (fc[i] - fa[i]) * p0110[i] + (fa[i] - fd[i]) * p1110[
-        i] + (fd[i]) * p1111[i])/q
+    out[i] = (q - fb[i]) * p0000[i] + (fb[i] - fc[i]) * p0100[i] + (fc[i] - fa[i]) * p0110[i] + (fa[i] - fd[i]) * p1110[
+        i] + (fd[i]) * p1111[i]
     i18 = i = np.logical_and.reduce((~(fab), ~(fac), ~i17[:, None], fbc, fcd)).squeeze(1)
-    out[i] = ((q - fb[i]) * p0000[i] + (fb[i] - fc[i]) * p0100[i] + (fc[i] - fd[i]) * p0110[i] + (fd[i] - fa[i]) * p0111[
-        i] + (fa[i]) * p1111[i])/q
+    out[i] = (q - fb[i]) * p0000[i] + (fb[i] - fc[i]) * p0100[i] + (fc[i] - fd[i]) * p0110[i] + (fd[i] - fa[i]) * p0111[
+        i] + (fa[i]) * p1111[i]
     i19 = i = np.logical_and.reduce((~(fab), ~(fac), ~i17[:, None], ~i18[:, None], fbc, fbd)).squeeze(1)
-    out[i] = ((q - fb[i]) * p0000[i] + (fb[i] - fd[i]) * p0100[i] + (fd[i] - fc[i]) * p0101[i] + (fc[i] - fa[i]) * p0111[
-        i] + (fa[i]) * p1111[i])/q
+    out[i] = (q - fb[i]) * p0000[i] + (fb[i] - fd[i]) * p0100[i] + (fd[i] - fc[i]) * p0101[i] + (fc[i] - fa[i]) * p0111[
+        i] + (fa[i]) * p1111[i]
     i20 = i = np.logical_and.reduce((~(fab), ~(fac), ~i17[:, None], ~i18[:, None], ~i19[:, None], fbc)).squeeze(1)
-    out[i] = ((q - fd[i]) * p0000[i] + (fd[i] - fb[i]) * p0001[i] + (fb[i] - fc[i]) * p0101[i] + (fc[i] - fa[i]) * p0111[
-        i] + (fa[i]) * p1111[i])/q
+    out[i] = (q - fd[i]) * p0000[i] + (fd[i] - fb[i]) * p0001[i] + (fb[i] - fc[i]) * p0101[i] + (fc[i] - fa[i]) * p0111[
+        i] + (fa[i]) * p1111[i]
 
     i21 = i = np.logical_and.reduce((~(fab), ~(fac), ~(fbc), fad)).squeeze(1)
-    out[i] = ((q - fc[i]) * p0000[i] + (fc[i] - fb[i]) * p0010[i] + (fb[i] - fa[i]) * p0110[i] + (fa[i] - fd[i]) * p1110[
-        i] + (fd[i]) * p1111[i])/q
+    out[i] = (q - fc[i]) * p0000[i] + (fc[i] - fb[i]) * p0010[i] + (fb[i] - fa[i]) * p0110[i] + (fa[i] - fd[i]) * p1110[
+        i] + (fd[i]) * p1111[i]
     i22 = i = np.logical_and.reduce((~(fab), ~(fac), ~(fbc), ~i21[:, None], fbd)).squeeze(1)
-    out[i] = ((q - fc[i]) * p0000[i] + (fc[i] - fb[i]) * p0010[i] + (fb[i] - fd[i]) * p0110[i] + (fd[i] - fa[i]) * p0111[
-        i] + (fa[i]) * p1111[i])/q
+    out[i] = (q - fc[i]) * p0000[i] + (fc[i] - fb[i]) * p0010[i] + (fb[i] - fd[i]) * p0110[i] + (fd[i] - fa[i]) * p0111[
+        i] + (fa[i]) * p1111[i]
     i23 = i = np.logical_and.reduce((~(fab), ~(fac), ~(fbc), ~i21[:, None], ~i22[:, None], fcd)).squeeze(1)
-    out[i] = ((q - fc[i]) * p0000[i] + (fc[i] - fd[i]) * p0010[i] + (fd[i] - fb[i]) * p0011[i] + (fb[i] - fa[i]) * p0111[
-        i] + (fa[i]) * p1111[i])/q
+    out[i] = (q - fc[i]) * p0000[i] + (fc[i] - fd[i]) * p0010[i] + (fd[i] - fb[i]) * p0011[i] + (fb[i] - fa[i]) * p0111[
+        i] + (fa[i]) * p1111[i]
     i24 = i = np.logical_and.reduce((~(fab), ~(fac), ~(fbc), ~i21[:, None], ~i22[:, None], ~i23[:, None])).squeeze(1)
-    out[i] = ((q - fd[i]) * p0000[i] + (fd[i] - fc[i]) * p0001[i] + (fc[i] - fb[i]) * p0011[i] + (fb[i] - fa[i]) * p0111[
-        i] + (fa[i]) * p1111[i])/q
+    out[i] = (q - fd[i]) * p0000[i] + (fd[i] - fc[i]) * p0001[i] + (fc[i] - fb[i]) * p0011[i] + (fb[i] - fa[i]) * p0111[
+        i] + (fa[i]) * p1111[i]
 
-    # out = out / q
+    out = out / q
     out = out.reshape((img_a1.shape[0], img_a1.shape[1], img_a1.shape[2],
                                img_a1.shape[3], out_c))
     out = np.transpose(out,(0,1,4,2,3)).reshape(
@@ -499,7 +494,6 @@ class eltr:
                     pad = (0, 2)
                 else:
                     pad = (0, 1)
-    
                 key = "s{}c0_{}".format(str(s + 1), mode)
 
                 for r in [0, 1, 2, 3]:
@@ -507,7 +501,6 @@ class eltr:
                     h, w, _ = img_lr_rot.shape
                     img_in = np.pad(img_lr_rot, (pad, pad, (0, 0)), mode='edge').transpose((2, 0, 1)) # (3, H, W)
                     img_in = img_in[:,np.newaxis,:,:] # (3, 1, H, W)
-      
                     pred += FourSimplexInterpFaster(self.lutDict[key], img_in, h, w,
                                                              self.opt.interval, 4 - r, upscale=1, out_c=out_c_list[s],
                                                              mode=mode)  # (3,out_c,H,W)
@@ -545,7 +538,7 @@ class eltr:
                     pad = (0, 2)
                 else:
                     pad = (0, 1)
- 
+
                 key = "s6c{}_{}".format(c, mode)
                 scale = self.opt.scale
                 for r in [0, 1, 2, 3]:
@@ -553,7 +546,6 @@ class eltr:
                     h, w, _ = img_lr_rot.shape
                     img_in = np.pad(img_lr_rot, (pad, pad, (0, 0)), mode='edge').transpose((2, 0, 1))
                     img_in = img_in[:, np.newaxis, :, :]
-                 
                     pred += FourSimplexInterpFaster(self.lutDict[key], img_in, h, w,
                                                     self.opt.interval, 4 - r, upscale=scale, out_c=1,
                                                     mode=mode)  # (3,out_c,H,W)
@@ -575,131 +567,6 @@ class eltr:
         return [psnr, ssim]
 
 
-def model(img_lr, modes,interval,scale):
-    lutDict = load_LUT()
-    out_c_list = [2, 2, 2, 1]
-    refine_list = []
-    # conv1~4
-    for s in range(4):
-        stage = s + 1
-        pred = 0
-        for mode in modes:
-            if mode in ["d", "y"]:
-                pad = (0, 2)
-            else:
-                pad = (0, 1)
-
-            key = "s{}c0_{}".format(str(s + 1), mode)
-
-            for r in [0, 1, 2, 3]:
-                img_lr_rot = np.rot90(img_lr, r)
-                h, w, _ = img_lr_rot.shape
-                img_in = np.pad(img_lr_rot, (pad, pad, (0, 0)), mode='edge').transpose((2, 0, 1)) # (3, H, W)
-                img_in = img_in[:,np.newaxis,:,:] # (3, 1, H, W)
-   
-                pred += FourSimplexInterpFaster(lutDict[key], img_in, h, w,
-                                                         interval, 4 - r, upscale=1, out_c=out_c_list[s],
-                                                         mode=mode)  # (3,out_c,H,W)
-        avg_factor, bias = len(modes) * 4, 127
-        img_lr = np.clip((pred / avg_factor) + bias, 0, 255)
-
-        if out_c_list[s] == 2:
-            x1, x2 = img_lr[:,0,:,:], img_lr[:,1,:,:] # (3, H, W)
-
-            x2 = x2.transpose((1, 2, 0)) # (H, W, 3)
-            x2 = np.round(np.clip(x2, 0, 255)).astype(np.float32)
-            img_lr = x2
-
-            x1 = x1[:,np.newaxis,:,:]
-            x1 = np.round(np.clip(x1, 0, 255)).astype(np.float32)
-            refine_list.append(x1)
-        else:
-            img_lr = np.round(np.clip(img_lr, 0, 255)).astype(np.float32)
-            refine_list.append(img_lr)
-
-    x = np.concatenate(refine_list,axis=1) # (3, 4, H, W)
-    # conv5
-    key = "s{}_channel".format(5)
-    weight = lutDict[key]
-    x = InterpTorchBatch_channel(weight, 4, x,interval)
-    x = np.round(np.clip(x+127, 0, 255)).astype(np.float32)
-
-    # conv6
-    pred = 0
-    for c in range(4):
-        x_c = x[:, c, :, :]
-        x_c = x_c.transpose((1, 2, 0))
-        for mode in modes:
-            if mode in ["d", "y"]:
-                pad = (0, 2)
-            else:
-                pad = (0, 1)
-
-            key = "s6c{}_{}".format(c, mode)
-            scale = scale
-            for r in [0, 1, 2, 3]:
-                img_lr_rot = np.rot90(x_c, r)
-                h, w, _ = img_lr_rot.shape
-                img_in = np.pad(img_lr_rot, (pad, pad, (0, 0)), mode='edge').transpose((2, 0, 1))
-                img_in = img_in[:, np.newaxis, :, :]
-
-                pred += FourSimplexInterpFaster(lutDict[key], img_in, h, w,
-                                                interval, 4 - r, upscale=scale, out_c=1,
-                                                mode=mode)  # (3,out_c,H,W)
-
-    pred = pred[:,0,:,:] / 4
-    avg_factor, bias = len(modes), 0
-    img_lr = np.clip((pred / avg_factor) + bias, 0, 255)
-    img_lr = img_lr.transpose((1, 2, 0))
-    img_lr = np.round(np.clip(img_lr, 0, 255)).astype(np.uint8)
-
-    # Save to file
-    img_out = img_lr
-    return img_out
-
-
-def load_LUT():
-    # Load LUT
-    lutDict = dict()
-
-    for mode in opt.modes:
-        # conv1
-        lut_path = os.path.join(opt.expDir, 'weight_s{}c0_{}.npy'.format(1, mode))
-        key = "s{}c0_{}".format(1, mode)
-        lutDict[key] = np.load(lut_path).reshape(-1, 2)
-
-
-        # conv2
-        lut_path = os.path.join(opt.expDir, 'weight_s{}c0_{}.npy'.format(2, mode))
-        key = "s{}c0_{}".format(2, mode)
-        lutDict[key] = np.load(lut_path).reshape(-1, 2)
-
-
-        # conv3
-        lut_path = os.path.join(opt.expDir, 'weight_s{}c0_{}.npy'.format(3, mode))
-        key = "s{}c0_{}".format(3, mode)
-        lutDict[key] = np.load(lut_path).reshape(-1, 2)
-
-
-        # conv4
-        lut_path = os.path.join(opt.expDir, 'weight_s{}c0_{}.npy'.format(4, mode))
-        key = "s{}c0_{}".format(4, mode)
-        lutDict[key] = np.load(lut_path).reshape(-1, 1)
-
-
-        for c in range(4):
-            # conv6
-            lut_path = os.path.join(opt.expDir, 'weight_s{}c{}_{}.npy'.format(6, c, mode))
-            key = "s{}c{}_{}".format(6, c, mode)
-            lutDict[key] = np.load(lut_path).reshape(-1, opt.scale ** 2)
-
-
-    lut_path = os.path.join(opt.expDir, 'weight_s{}_channel.npy'.format(5))
-    key = "s{}_channel".format(5)
-    lutDict[key] = np.load(lut_path).reshape(-1, 4)
-    return lutDict
-
-
 if __name__ == "__main__":
     opt = TestOptions().parse()
     L = 2 ** (8 - opt.interval) + 1  # 17
@@ -710,59 +577,46 @@ if __name__ == "__main__":
         # conv1
         lut_path = os.path.join(opt.expDir, 'weight_s{}c0_{}.npy'.format(1, mode))
         key = "s{}c0_{}".format(1, mode)
-        lutDict[key] = np.load(lut_path).reshape(-1, 2)
+        lutDict[key] = np.load(lut_path).astype(np.float32).reshape(-1, 2)
+
 
 
         # conv2
         lut_path = os.path.join(opt.expDir, 'weight_s{}c0_{}.npy'.format(2, mode))
         key = "s{}c0_{}".format(2, mode)
-        lutDict[key] = np.load(lut_path).reshape(-1, 2)
+        lutDict[key] = np.load(lut_path).astype(np.float32).reshape(-1, 2)
 
 
         # conv3
         lut_path = os.path.join(opt.expDir, 'weight_s{}c0_{}.npy'.format(3, mode))
         key = "s{}c0_{}".format(3, mode)
-        lutDict[key] = np.load(lut_path).reshape(-1, 2)
+        lutDict[key] = np.load(lut_path).astype(np.float32).reshape(-1, 2)
 
 
         # conv4
         lut_path = os.path.join(opt.expDir, 'weight_s{}c0_{}.npy'.format(4, mode))
         key = "s{}c0_{}".format(4, mode)
-        lutDict[key] = np.load(lut_path).reshape(-1, 1)
+        lutDict[key] = np.load(lut_path).astype(np.float32).reshape(-1, 1)
 
 
         for c in range(4):
             # conv6
             lut_path = os.path.join(opt.expDir, 'weight_s{}c{}_{}.npy'.format(6, c, mode))
             key = "s{}c{}_{}".format(6, c, mode)
-            lutDict[key] = np.load(lut_path).reshape(-1, opt.scale ** 2)
+            lutDict[key] = np.load(lut_path).astype(np.float32).reshape(-1, opt.scale ** 2)
 
 
     lut_path = os.path.join(opt.expDir, 'weight_s{}_channel.npy'.format(5))
     key = "s{}_channel".format(5)
-    lutDict[key] = np.load(lut_path).reshape(-1, 4)
+    lutDict[key] = np.load(lut_path).astype(np.float32).reshape(-1, 4)
 
-    all_datasets = ['Set5']
+    all_datasets = ['Set5', 'Set14', 'B100', 'Urban100', 'Manga109']
     # all_datasets = ['Urban100','Manga109']
+    # all_datasets = ['Set5', 'Set14']
 
-    # import time
 
     ref2index = None
-    # start_time = time.time()
-
-    # for dataset in all_datasets:
-    #     etr = eltr(dataset, opt, lutDict,ref2index)
-    #     etr.run(8)
-    # exit()
-    # end_time = time.time()
-    # print(end_time-start_time)
-
-    # Load LR image
-    img_lr = np.array(Image.open('./img_004_180_320.png')).astype(np.float32)[:,:,:1]
-    if len(img_lr.shape) == 2:
-        img_lr = np.expand_dims(img_lr, axis=2)
-        img_lr = np.concatenate([img_lr, img_lr, img_lr], axis=2)
-    
-    pred = model(img_lr, modes=['s','d','y'],interval=4,scale=4)
-    print(pred.shape)
+    for dataset in all_datasets:
+        etr = eltr(dataset, opt, lutDict,ref2index)
+        etr.run(3)
 

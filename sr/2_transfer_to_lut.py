@@ -6,7 +6,7 @@ import torch
 
 sys.path.insert(0, "../")  # run under the current directory
 from common.option import TestOptions
-import model
+import model as Model
 
 
 def get_input_tensor(opt):
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     modes = [i for i in opt.modes]
     stages = opt.stages
 
-    model = getattr(model, opt.model)
+    model = getattr(Model, opt.model)
 
     model_G = model(nf=opt.nf, scale=opt.scale, modes=modes, stages=stages).cuda()
 

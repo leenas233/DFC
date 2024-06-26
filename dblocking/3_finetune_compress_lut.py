@@ -9,19 +9,40 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from PIL import Image
-from torch.utils.tensorboard import SummaryWriter
 
 import model as Model
-from data import Provider, SRBenchmark
+from data import Provider, DBBenchmark
 
 sys.path.insert(0, "../")  # run under the project directory
 from common.option import TrainOptions
-from common.utils import PSNR, logger_info, _rgb2ycbcr
+from common.utils import logger_info, PSNR
 from common.Writer import Logger
 
 torch.backends.cudnn.benchmark = True
 
 mode_pad_dict = {"s": 1, "d": 2, "y": 2, "e": 3, "h": 3, "o": 3}
+
+
+def mulut_predict(model_G, x, phase="train", opt=None):
+    modes, stages = opt.modes, opt.stages
+    # Stage 1
+    for s in range(stages):
+        pred = 0
+        for mode in modes:
+            pad = mode_pad_dict[mode]
+            for r in [0, 1, 2, 3]:
+                pred += round_func(torch.rot90(model_G(F.pad(torch.rot90(x, r, [
+                    2, 3]), (0, pad, 0, pad), mode='replicate'), stage=s + 1, mode=mode), (4 - r) % 4, [2, 3]) * 127)
+        if s + 1 == stages:
+            avg_factor, bias, norm = len(modes), 0, 1
+            x = round_func((pred / avg_factor) + bias)
+            if phase == "train":
+                x = x / 255.0
+        else:
+            avg_factor, bias, norm = len(modes) * 4, 127, 255.0
+            x = round_func(torch.clamp((pred / avg_factor) + bias, 0, 255)) / norm
+
+    return x
 
 
 def round_func(input):
@@ -47,10 +68,9 @@ def SaveCheckpoint(model_G, opt_G, opt, i, best=False):
 
 
 def valid_steps(model_G, valid, opt, iter):
-    if opt.debug:
-        datasets = ['Set5', 'Set14']
-    else:
-        datasets = ['Set5', 'Set14']
+    datasets = ['classic5', 'LIVE1']
+    _im_num = [5, 29]
+    psnr_list = []
 
     with torch.no_grad():
         model_G.eval()
@@ -67,34 +87,36 @@ def valid_steps(model_G, valid, opt, iter):
                 key = datasets[i] + '_' + files[j][:-4]
 
                 lb = valid.ims[key]
-                input_im = valid.ims[key + 'x%d' % opt.scale]
+                input_im = valid.ims[key + 'x%d' % opt.qf]
 
-                input_im = input_im.astype(np.float32) / 255.0
+                # no need to divide 255.0
+                # input_im = input_im.astype(np.float32) / 255.0
                 im = torch.Tensor(np.expand_dims(
                     np.transpose(input_im, [2, 0, 1]), axis=0)).cuda()
 
-                pred = model_G(im,'valid')
+                pred = model_G(im, 'valid')
 
                 pred = np.transpose(np.squeeze(
                     pred.data.cpu().numpy(), 0), [1, 2, 0])
                 pred = np.round(np.clip(pred, 0, 255)).astype(np.uint8)
-
-                left, right = _rgb2ycbcr(pred)[:, :, 0], _rgb2ycbcr(lb)[:, :, 0]
-                psnrs.append(PSNR(left, right, opt.scale))  # single channel, no scale change
+                psnrs.append(
+                    PSNR(pred[:, :, 0], lb[:, :, 0], 0))  # single channel, no scale change
 
                 if iter < 10000:  # save input and gt at start
                     input_img = np.round(np.clip(input_im * 255.0, 0, 255)).astype(np.uint8)
-                    Image.fromarray(input_img).save(
+                    Image.fromarray(input_img[:,:,0]).save(
                         os.path.join(result_path, '{}_input.png'.format(key.split('_')[-1])))
-                    Image.fromarray(lb.astype(np.uint8)).save(
+                    Image.fromarray(lb[:,:,0].astype(np.uint8)).save(
                         os.path.join(result_path, '{}_gt.png'.format(key.split('_')[-1])))
 
-                Image.fromarray(pred).save(
+                Image.fromarray(pred[:,:,0]).save(
                     os.path.join(result_path, '{}_net.png'.format(key.split('_')[-1])))
 
             logger.info(
                 'Iter {} | Dataset {} | AVG Val PSNR: {:02f}'.format(iter, datasets[i], np.mean(np.asarray(psnrs))))
             writer.scalar_summary('PSNR_valid/{}'.format(datasets[i]), np.mean(np.asarray(psnrs)), iter)
+            psnr_list.append(np.mean(np.asarray(psnrs)))
+        return psnr_list
 
 
 if __name__ == "__main__":
@@ -113,8 +135,10 @@ if __name__ == "__main__":
     stages = opt.stages
 
     model = getattr(Model, opt.model)
-
-    model_G = model(nf=opt.nf, scale=opt.scale, modes=modes, stages=stages).cuda()
+    c_in = 1
+    model_G = model(lut_folder=opt.expDir, modes=modes, stages=stages, qf=opt.qf, interval=opt.interval,
+                    compressed_dimensions=opt.cd, diagonal_width=opt.dw, sampling_interval=opt.si,
+                    c_in=1).cuda()
 
     if opt.gpuNum > 1:
         model_G = torch.nn.DataParallel(model_G, device_ids=list(range(opt.gpuNum)))
@@ -142,10 +166,10 @@ if __name__ == "__main__":
         opt_G.load_state_dict(lm.state_dict())
 
     # Training dataset
-    train_iter = Provider(opt.batchSize, opt.workerNum, opt.scale, opt.trainDir, opt.cropSize)
+    train_iter = Provider(opt.batchSize, opt.workerNum, opt.qf, opt.trainDir, opt.cropSize)
 
     # Valid dataset
-    valid = SRBenchmark(opt.valDir, scale=opt.scale)
+    valid = DBBenchmark(opt.valDir, qf=opt.qf)
 
     l_accum = [0., 0., 0.]
     dT = 0.
@@ -154,7 +178,6 @@ if __name__ == "__main__":
 
     # TRAINING
     i = opt.startIter
-
     for i in range(opt.startIter + 1, opt.totalIter + 1):
         model_G.train()
 
@@ -169,7 +192,7 @@ if __name__ == "__main__":
         st = time.time()
         opt_G.zero_grad()
 
-        pred = model_G(im,'train')
+        pred = model_G(im, 'train')
 
         loss_G = F.mse_loss(pred, lb)
         loss_G.backward()
@@ -193,19 +216,33 @@ if __name__ == "__main__":
             dT = 0.
             rT = 0.
 
-        # Save models
-        if i % opt.saveStep == 0:
-            if opt.gpuNum > 1:
-                SaveCheckpoint(model_G.module, opt_G, opt, i)
-            else:
-                SaveCheckpoint(model_G, opt_G, opt, i)
-
         # Validation
         if i % opt.valStep == 0:
             # validation during multi GPU training
             if opt.gpuNum > 1:
-                valid_steps(model_G.module, valid, opt, i)
+                psnr_list = valid_steps(model_G.module, valid, opt, i)
             else:
-                valid_steps(model_G, valid, opt, i)
+                psnr_list = valid_steps(model_G, valid, opt, i)
 
+
+    # Save finetuned LUTs
+    if opt.model in ['SPF_LUT_DFC', 'SPF_LUT']:
+        for k,v in model_G.named_parameters():
+            ft_lut_path = os.path.join(opt.expDir,"{}.npy".format(k))
+            lut_weight = np.round(np.clip(v.cpu().detach().numpy(), -1, 1) * 127).astype(np.int8)
+            np.save(ft_lut_path, lut_weight)
+    else:
+        for s in range(stages):
+            stage = s + 1
+            for c in range(c_in):
+                for mode in modes:
+                    ft_lut_path = os.path.join(opt.expDir,"LUT_ft_qf{}_{}bit_int8_s{}_c{}_{}_compress1.npy".format(opt.qf, opt.interval,str(stage),str(c), mode))
+                    lut_weight = np.round(np.clip(getattr(model_G, "weight_s{}_c{}_{}_compress1".format(str(s + 1), str(c), mode)).cpu().detach().numpy(),-1, 1) * 127).astype(np.int8)
+                    np.save(ft_lut_path, lut_weight)
+
+                    ft_lut_path = os.path.join(opt.expDir,"LUT_ft_qf{}_{}bit_int8_s{}_c{}_{}_compress2.npy".format(opt.qf,opt.interval,str(stage),str(c), mode))
+                    lut_weight = np.round(np.clip(getattr(model_G,"weight_s{}_c{}_{}_compress2".format(str(s + 1), str(c), mode)).cpu().detach().numpy(),-1, 1) * 127).astype(np.int8)
+                    np.save(ft_lut_path, lut_weight)
+
+    logger.info("Finetuned LUT saved to {}".format(opt.expDir))
     logger.info("Complete")

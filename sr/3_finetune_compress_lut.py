@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from PIL import Image
 
-import model_new
+import model as Model
 from data import Provider, SRBenchmark
 
 sys.path.insert(0, "../")  # run under the current directory
@@ -26,7 +26,6 @@ def valid_steps(model_G, valid, opt, iter):
     else:
         datasets = ['Set5', 'Set14']
 
-    psnr_list = []
     with torch.no_grad():
         model_G.eval()
 
@@ -64,8 +63,6 @@ def valid_steps(model_G, valid, opt, iter):
             logger.info('Iter {} | Dataset {} | AVG PSNR: {:02f}, AVG: SSIM: {:04f}'.format(iter, datasets[i],
                                                                                             np.mean(np.asarray(psnrs)),
                                                                                             np.mean(np.asarray(ssims))))
-            psnr_list.append(np.mean(np.asarray(psnrs)))
-        return psnr_list
 
 
 if __name__ == "__main__":
@@ -80,9 +77,10 @@ if __name__ == "__main__":
     modes = [i for i in opt.modes]
     stages = opt.stages
 
-    model = model_new.cRCLUT
+    model = getattr(Model, opt.model)
 
-    model_G = model(lut_folder=opt.expDir, modes=modes, stages=stages, upscale=opt.scale, interval=opt.interval).cuda()
+    model_G = model(lut_folder=opt.expDir, modes=modes, stages=stages, lutName=opt.load_lutName, upscale=opt.scale, interval=opt.interval,
+                    compressed_dimensions=opt.cd, diagonal_width=opt.dw, sampling_interval=opt.si, phase='train').cuda()
 
     # Optimizers
     params_G = list(filter(lambda p: p.requires_grad, model_G.parameters()))
@@ -118,7 +116,7 @@ if __name__ == "__main__":
     rT = 0.
     accum_samples = 0
     i = opt.startIter
-    best_sum = 0
+    # best_sum = 0
     for i in range(opt.startIter + 1, opt.totalIter + 1):
         model_G.train()
 
@@ -162,33 +160,24 @@ if __name__ == "__main__":
             else:
                 psnr_list = valid_steps(model_G, valid, opt, i)
 
-            if np.sum(np.array(psnr_list))>best_sum:
-                best_sum = np.sum(np.array(psnr_list))
-                # Save finetuned LUTs
-                if opt.model in ['cMuLUT_IMDBV2', 'MuLUT_IMDBV2_LUT', 'cMuLUT_IMDBV2_xyz', 'cRCLUT', 'cRCLUT4_4']:
-                    for k, v in model_G.named_parameters():
-                        if 'RC' in k:
-                            ft_lut_path = os.path.join(opt.expDir, "{}.npy".format(k))
-                            # lut_weight = np.clip(v.cpu().detach().numpy(), -1, 1) * 127
-                            # lut_weight = np.clip(np.round(v.cpu().detach().numpy()),-127,127).astype(np.int8)
-                            lut_weight = v.cpu().detach().numpy()  # .astype(np.int8)
-                            np.save(ft_lut_path, lut_weight)
-                        else:
 
-                            ft_lut_path = os.path.join(opt.expDir, "{}.npy".format(k))
-                            lut_weight = np.round(np.clip(v.cpu().detach().numpy(), -1, 1) * 127).astype(np.int8)
-                            np.save(ft_lut_path, lut_weight)
-                else:
-                    for s in range(stages):
-                        stage = s + 1
-                        for mode in modes:
-                            ft_lut_path = os.path.join(opt.expDir,"LUT_ft_x{}_{}bit_int8_s{}_{}_compress1.npy".format(opt.scale, opt.interval, str(stage),mode))
-                            lut_weight = np.round(np.clip(getattr(model_G, "weight_s{}_{}_compress1".format(str(s+1), mode)).cpu().detach().numpy(), -1, 1) * 127).astype(np.int8)
-                            np.save(ft_lut_path, lut_weight)
+    # Save finetuned LUTs
+    if opt.model in ['SPF_LUT_DFC', 'SPF_LUT']:
+        for k, v in model_G.named_parameters():
+            ft_lut_path = os.path.join(opt.expDir, "{}.npy".format(k))
+            lut_weight = np.round(np.clip(v.cpu().detach().numpy(), -1, 1) * 127).astype(np.int8)
+            np.save(ft_lut_path, lut_weight)
+    else:
+        for s in range(stages):
+            stage = s + 1
+            for mode in modes:
+                ft_lut_path = os.path.join(opt.expDir,"LUT_ft_x{}_{}bit_int8_s{}_{}_compress1.npy".format(opt.scale, opt.interval, str(stage),mode))
+                lut_weight = np.round(np.clip(getattr(model_G, "weight_s{}_{}_compress1".format(str(s+1), mode)).cpu().detach().numpy(), -1, 1) * 127).astype(np.int8)
+                np.save(ft_lut_path, lut_weight)
 
-                            ft_lut_path = os.path.join(opt.expDir,"LUT_ft_x{}_{}bit_int8_s{}_{}_compress2.npy".format(opt.scale, opt.interval,str(stage),mode))
-                            lut_weight = np.round(np.clip(getattr(model_G, "weight_s{}_{}_compress2".format(str(s + 1), mode)).cpu().detach().numpy(), -1,1) * 127).astype(np.int8)
-                            np.save(ft_lut_path, lut_weight)
+                ft_lut_path = os.path.join(opt.expDir,"LUT_ft_x{}_{}bit_int8_s{}_{}_compress2.npy".format(opt.scale, opt.interval,str(stage),mode))
+                lut_weight = np.round(np.clip(getattr(model_G, "weight_s{}_{}_compress2".format(str(s + 1), mode)).cpu().detach().numpy(), -1,1) * 127).astype(np.int8)
+                np.save(ft_lut_path, lut_weight)
 
-                logger.info("Finetuned LUT saved to {}".format(opt.expDir))
+    logger.info("Finetuned LUT saved to {}".format(opt.expDir))
     logger.info("Complete")
