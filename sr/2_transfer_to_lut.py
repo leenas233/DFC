@@ -79,7 +79,7 @@ if __name__ == "__main__":
     model_G = model(nf=opt.nf, scale=opt.scale, modes=modes, stages=stages).cuda()
 
     lm = torch.load(os.path.join(opt.expDir, 'Model_{:06d}.pth'.format(opt.loadIter)))
-    model_G.load_state_dict(lm.state_dict(), strict=True)
+    model_G.load_state_dict(lm, strict=True)
 
     for s in range(stages):
         stage = s + 1

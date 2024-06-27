@@ -39,7 +39,7 @@ def SaveCheckpoint(model_G, opt_G, opt, i, best=False):
     if best:
         str_best = '_best'
 
-    torch.save(model_G, os.path.join(
+    torch.save(model_G.state_dict(), os.path.join(
         opt.expDir, 'Model_{:06d}{}.pth'.format(i, str_best)))
     torch.save(opt_G, os.path.join(
         opt.expDir, 'Opt_{:06d}{}.pth'.format(i, str_best)))
@@ -136,7 +136,7 @@ if __name__ == "__main__":
     if opt.startIter > 0:
         lm = torch.load(
             os.path.join(opt.expDir, 'Model_{:06d}.pth'.format(opt.startIter)))
-        model_G.load_state_dict(lm.state_dict(), strict=True)
+        model_G.load_state_dict(lm, strict=True)
 
         lm = torch.load(os.path.join(opt.expDir, 'Opt_{:06d}.pth'.format(opt.startIter)))
         opt_G.load_state_dict(lm.state_dict())

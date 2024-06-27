@@ -98,7 +98,7 @@ if __name__ == "__main__":
     if opt.startIter > 0:
         lm = torch.load(
             opt.expDir, 'Model_{:06d}.pth'.format(opt.startIter))
-        model_G.load_state_dict(lm.state_dict(), strict=True)
+        model_G.load_state_dict(lm, strict=True)
 
         lm = torch.load(opt.expDir, 'Opt_{:06d}.pth'.format(opt.startIter))
         opt_G.load_state_dict(lm.state_dict())
